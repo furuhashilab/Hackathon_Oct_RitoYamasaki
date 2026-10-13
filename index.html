@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Fotoshiって何？ | 古橋研究室 月1ハッカソン 2026年10月</title>
+<meta name="description" content="古橋研究室の月1ハッカソンで、写真で地図を更新するアプリFotoshiを試したレポートです。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --night: #0A1033;      /* deep ultramarine base */
+    --panel: #111A47;
+    --grid: #16205A;
+    --text: #E8ECFF;
+    --muted: #97A3DD;
+    --cyan: #3DF5FF;       /* electric cyan: main signal */
+    --magenta: #FF3DCB;    /* heat / alert */
+    --volt: #F2FF3D;       /* voltage yellow: tags */
+    --glow-cyan: 0 0 6px rgba(61,245,255,.8), 0 0 22px rgba(61,245,255,.45);
+    --dot: "DotGothic16", "Zen Kaku Gothic New", monospace;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background:
+      linear-gradient(var(--grid) 1px, transparent 1px) 0 0 / 48px 48px,
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px) 0 0 / 48px 48px,
+      var(--night);
+    background-attachment: fixed;
+    color: var(--text);
+    font-family: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif;
+    font-size: 17px;
+    line-height: 1.9;
+  }
+  ::selection { background: var(--magenta); color: #fff; }
+  a { color: var(--cyan); text-underline-offset: 3px; }
+  a:hover { text-shadow: var(--glow-cyan); }
+  a:focus-visible { outline: 2px solid var(--volt); outline-offset: 3px; }
+
+  /* ---------- Hero: an LED signboard over a glowing map ---------- */
+  .hero {
+    position: relative;
+    overflow: hidden;
+    padding: 96px 24px 72px;
+    background: radial-gradient(ellipse at 75% 40%, rgba(61,245,255,.16), transparent 60%),
+                radial-gradient(ellipse at 15% 90%, rgba(255,61,203,.18), transparent 55%);
+    border-bottom: 1px solid var(--cyan);
+    box-shadow: 0 1px 18px rgba(61,245,255,.35);
+  }
+  .hero svg.map {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+  }
+  .hero svg .contour { fill: none; stroke: var(--cyan); stroke-width: 1.4; opacity: .55; filter: drop-shadow(0 0 4px var(--cyan)); }
+  .hero svg .heat { fill: var(--magenta); filter: blur(10px); opacity: .6; }
+  .hero svg .heat-core { fill: #fff; opacity: .9; }
+  .hero-inner { position: relative; max-width: 800px; margin: 0 auto; }
+  .hero .event {
+    font-family: var(--dot);
+    color: var(--volt);
+    font-size: 15px;
+    margin: 0 0 18px;
+    letter-spacing: .08em;
+  }
+  .hero h1 {
+    font-family: var(--dot);
+    font-weight: 400;
+    font-size: clamp(48px, 11vw, 104px);
+    line-height: 1.1;
+    margin: 0 0 24px;
+    color: #F4FEFF;
+    text-shadow: 0 0 4px #fff, 0 0 12px var(--cyan), 0 0 32px var(--cyan), 0 0 64px rgba(61,245,255,.6);
+    animation: power-on 1.6s steps(1, end) 1 both;
+  }
+  @keyframes power-on {
+    0%   { opacity: 0; }
+    10%  { opacity: 1; }
+    16%  { opacity: .15; }
+    24%  { opacity: 1; }
+    30%  { opacity: .3; }
+    38%  { opacity: 1; }
+    100% { opacity: 1; }
+  }
+  .hero .byline {
+    margin: 0;
+    font-size: 15px;
+    color: var(--muted);
+  }
+  .hero .byline b { color: var(--text); font-weight: 500; }
+
+  /* ---------- Content ---------- */
+  main { max-width: 800px; margin: 0 auto; padding: 24px 24px 88px; }
+  section { padding-top: 56px; }
+  .lead p { font-size: 18px; }
+  h2 {
+    font-family: var(--dot);
+    font-weight: 400;
+    font-size: 30px;
+    line-height: 1.3;
+    margin: 0 0 20px;
+    color: var(--cyan);
+    text-shadow: var(--glow-cyan);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  h2::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(90deg, var(--cyan), transparent);
+    box-shadow: 0 0 6px var(--cyan);
+  }
+  h3 { font-size: 19px; margin: 24px 0 8px; line-height: 1.5; }
+  p { margin: 0 0 16px; }
+  strong { color: var(--volt); font-weight: 700; }
+
+  dl.features {
+    margin: 0;
+    display: grid;
+    gap: 2px;
+    border-left: 2px solid var(--magenta);
+    padding-left: 20px;
+  }
+  dl.features dt { font-weight: 700; margin-top: 14px; color: #fff; }
+  dl.features dt:first-child { margin-top: 0; }
+  dl.features dd { margin: 0; color: var(--muted); }
+
+  .shots {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 18px;
+    margin: 24px 0;
+  }
+  figure { margin: 0; }
+  figure img {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    height: auto;
+    border-radius: 18px;
+    border: 1px solid rgba(61,245,255,.55);
+    box-shadow: 0 0 0 4px rgba(61,245,255,.06), 0 0 24px rgba(61,245,255,.18);
+    background: var(--panel);
+  }
+  figcaption { font-size: 14px; color: var(--muted); margin-top: 10px; line-height: 1.6; }
+  figcaption b { font-family: var(--dot); font-weight: 400; color: var(--cyan); font-size: 16px; }
+
+  .missing {
+    aspect-ratio: 9 / 16;
+    max-height: 420px;
+    border: 1px dashed var(--magenta);
+    border-radius: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 12px;
+    font-family: var(--dot);
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--magenta);
+    background: rgba(255,61,203,.06);
+    word-break: break-all;
+  }
+
+  pre {
+    background: #060A24;
+    border: 1px solid var(--grid);
+    border-left: 3px solid var(--volt);
+    border-radius: 8px;
+    padding: 14px 16px;
+    overflow-x: auto;
+    font-size: 14px;
+    line-height: 1.6;
+    margin: 0 0 16px;
+    color: var(--volt);
+  }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  p code { color: var(--volt); font-size: .9em; }
+
+  .note {
+    background: rgba(61,245,255,.07);
+    border: 1px solid rgba(61,245,255,.3);
+    border-radius: 10px;
+    padding: 12px 16px;
+    color: var(--muted);
+    font-size: 15px;
+  }
+
+  .bug {
+    position: relative;
+    background: linear-gradient(160deg, rgba(255,61,203,.10), rgba(17,26,71,.9) 45%);
+    border: 1px solid rgba(255,61,203,.55);
+    border-radius: 20px;
+    padding: 6px 22px 18px;
+    margin: 24px 0;
+    box-shadow: 0 0 28px rgba(255,61,203,.15);
+  }
+  .bug h3 span.tag {
+    display: inline-block;
+    font-family: var(--dot);
+    font-weight: 400;
+    background: var(--volt);
+    color: var(--night);
+    font-size: 13px;
+    border-radius: 4px;
+    padding: 1px 8px;
+    margin-right: 10px;
+    vertical-align: 2px;
+    box-shadow: 0 0 10px rgba(242,255,61,.6);
+  }
+  .bug .shots { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+  .bug figure img { border-color: rgba(255,61,203,.5); box-shadow: 0 0 20px rgba(255,61,203,.2); }
+
+  footer {
+    border-top: 1px solid var(--grid);
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 28px 24px 56px;
+    font-size: 14px;
+    color: var(--muted);
+  }
+  footer .label { font-family: var(--dot); color: var(--cyan); margin: 0; }
+  footer ul { padding-left: 1.2em; margin: 8px 0 18px; }
+
+  @media (max-width: 520px) {
+    body { font-size: 16px; }
+    .hero { padding: 72px 20px 56px; }
+    main, footer { padding-left: 20px; padding-right: 20px; }
+    h2 { font-size: 26px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .hero h1 { animation: none; }
+  }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <svg class="map" viewBox="0 0 800 420" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+    <g class="contour">
+      <path d="M600 200c0-70 60-120 130-110s110 80 80 140-120 80-170 50-40-50-40-80z"/>
+      <path d="M560 205c-5-100 80-160 170-150s150 110 110 190-160 110-230 70-45-60-50-110z"/>
+      <path d="M520 210c-10-130 100-200 215-190s190 140 140 240-200 140-290 90-55-75-65-140z"/>
+      <path d="M480 215c-15-160 120-245 260-230s230 170 170 290-240 170-350 110-65-90-80-170z"/>
+      <path d="M100 360c40-50 110-60 150-20s20 90-40 100-150-30-110-80z"/>
+      <path d="M60 365c50-80 160-95 220-35s30 130-60 145-220-40-160-110z"/>
+    </g>
+    <circle class="heat" cx="690" cy="180" r="34"/>
+    <circle class="heat" cx="610" cy="300" r="22"/>
+    <circle class="heat" cx="170" cy="370" r="26"/>
+    <circle class="heat-core" cx="690" cy="180" r="3"/>
+    <circle class="heat-core" cx="610" cy="300" r="2.5"/>
+    <circle class="heat-core" cx="170" cy="370" r="2.5"/>
+  </svg>
+  <div class="hero-inner">
+    <p class="event">古橋研究室 月1ハッカソン 2026.10</p>
+    <h1>Fotoshiって何？</h1>
+    <p class="byline">レポート：<b>山﨑 璃音</b>（Yamasaki Rito）</p>
+  </div>
+</header>
+
+<main>
+
+  <section class="lead">
+    <p>こんにちは！古橋研究室恒例の月1ハッカソン！</p>
+    <p>今回のテーマは、FOSS4G Hiroshimaなどで紹介されたツールを触ってみよう！というものです。自分はAndroidのスマホを持っていたので、Fotoshiを試してみることにしました。</p>
+  </section>
+
+  <section>
+    <h2>Fotoshiの特徴</h2>
+    <p>他のサービスと比べたときの違いをまとめました。</p>
+    <dl class="features">
+      <dt>ピンポイント撮影型</dt>
+      <dd>道を連続撮影するMapillaryなどと違い、お店や記念碑など「特定の場所・物」を撮って、地図上のオブジェクトに直接ひもづける。</dd>
+      <dt>「今の姿」と「変化」を重視</dt>
+      <dd>写真をお店や建物など個別の対象にひもづけ、その場所の最新の様子や変化を追いやすくすることを目指している。</dd>
+      <dt>オープンライセンス</dt>
+      <dd>投稿写真は原則CC BY 4.0で公開され、写真ごとにライセンスが明示される。</dd>
+      <dt>オープンな地図への貢献</dt>
+      <dd>OpenStreetMapなどのオープンな地図データを、より新しく正確にするために活用できる。</dd>
+    </dl>
+  </section>
+
+  <section>
+    <h2>UI</h2>
+    <p>画面はシンプルで、プロフィール・カメラ・マップの3つです。</p>
+    <div class="shots">
+      <figure>
+        <img src="images/FotoshiUI01_profile.png" alt="Fotoshiのプロフィール画面" loading="lazy">
+        <figcaption><b>プロフィール</b><br>自分があげた写真や日数などを見られる</figcaption>
+      </figure>
+      <figure>
+        <img src="images/FotoshiUI02_camera.png" alt="Fotoshiのカメラ画面" loading="lazy">
+        <figcaption><b>カメラ</b><br>0.5倍・1倍・2倍の切り替えとフラッシュ機能</figcaption>
+      </figure>
+      <figure>
+        <img src="images/FotoshiUI03_map.png" alt="Fotoshiのマップ画面（撮影場所のヒートマップ）" loading="lazy">
+        <figcaption><b>マップ</b><br>Fotoshiで撮影された場所をヒートマップで見られる</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section>
+    <h2>レイヤーを変えてみた</h2>
+    <p>マップではレイヤーも変えられて、URLとレイヤー名を入れる場所があったので、国土地理院の航空写真を入れてみたのですが……変わってない？？</p>
+    <p>入れたURLはこちらです。</p>
+    <pre><code>https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg</code></pre>
+    <p class="note">考えられる原因：URLの <code>{z}</code> などの波かっこが <code>%7Bz%7D</code> のように変換されていると、アプリが座標に置き換えられずタイルを読み込めない可能性があります。また、入力欄に最初から「https://」がある場合は、それ以降だけを入れる必要があるかもしれません。</p>
+    <p>あと、追加したレイヤーのアイコンを触ったら、登録したURLを確認できるようにしてほしいですね。</p>
+  </section>
+
+  <section>
+    <h2>感想</h2>
+    <p>撮影して地物を選ぶだけで投稿が完成するので、<strong>とても簡単でやりやすい</strong>と思いました。撮影場所を選ぶときに、選んだ建物の色が変わるなど、使いやすさが重視されていると感じました。</p>
+    <div class="shots">
+      <figure>
+        <img src="images/impression.png" alt="撮影場所の選択画面。選んだ建物の色が変わっている" loading="lazy">
+        <figcaption>選んだ建物の色が変わる</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section>
+    <h2>バグ？</h2>
+    <p>使っていて気になったところです。</p>
+
+    <div class="bug">
+      <h3><span class="tag">地図</span>撮影した写真の地図表示が不安定</h3>
+      <p>屋内で撮影したときは、最初は地図に表示されるのに、すぐに消えてしまいました（下の2枚はどちらも屋内です）。別の日に屋外で試したところ、撮影場所がしっかり表示されました（屋外のスクショは撮り忘れてしまいました…）。</p>
+      <p>屋内 → 表示されてもすぐ消える<br>屋外 → 表示された</p>
+      <p class="note">屋内はGPSの精度が落ちやすいので、位置情報がうまく取れなかったのかもしれません。</p>
+      <div class="shots">
+        <figure>
+          <img src="images/bag01.png" alt="屋内で撮影した写真が地図に表示されている様子" loading="lazy">
+          <figcaption>屋内：最初は表示される</figcaption>
+        </figure>
+        <figure>
+          <img src="images/bag01_disapper.png" alt="屋内で撮影した写真が地図から消えた様子" loading="lazy">
+          <figcaption>屋内：すぐに消えてしまう</figcaption>
+        </figure>
+      </div>
+    </div>
+
+    <div class="bug">
+      <h3><span class="tag">ログイン</span>パスワード再設定のコードがGmailに届かない</h3>
+      <p>パスワード再設定の画面でコードを送ってもらっても、Gmailにコードが届きませんでした。メールでのログインはうまくいきませんでしたが、画面下の「Googleアカウントでログイン」から入り直せました。（Googleアカウント・メールのどちらも同じメールアドレスを入れています）</p>
+      <div class="shots">
+        <figure>
+          <img src="images/bagu02_code.png" alt="パスワード再設定コードの入力画面" loading="lazy">
+          <figcaption>パスワード再設定コードの画面</figcaption>
+        </figure>
+        <figure>
+          <img src="images/bag02_gmail.png" alt="再設定コードのメールが届いていないGmailの画面" loading="lazy">
+          <figcaption>Gmailにコードが届いていない</figcaption>
+        </figure>
+      </div>
+    </div>
+
+    <div class="bug">
+      <h3><span class="tag">表示</span>地図が韓国語表記になる</h3>
+      <p>地図のラベルが韓国語で表示されることがありました。ズームレベルを変えたら日本語に戻ったように見えます。</p>
+      <div class="shots">
+        <figure>
+          <img src="images/bag03_inkorean.png" alt="地図のラベルが韓国語で表示されている様子" loading="lazy">
+          <figcaption>韓国語で表示</figcaption>
+        </figure>
+        <figure>
+          <img src="images/bag03_inJapanese.png" alt="ズームを変えて日本語表示に戻った地図" loading="lazy">
+          <figcaption>ズームを変えると日本語に</figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <p class="label">参考リンク</p>
+  <ul>
+    <li><a href="https://fotoshi.com/">Fotoshi 公式サイト</a></li>
+    <li><a href="https://medium.com/furuhashilab/fotoshi%E3%81%A3%E3%81%A6%E4%BD%95-2a965cd535de">Medium版の記事「Fotoshiって何？」</a></li>
+    <li><a href="https://medium.com/furuhashilab">Furuhashi (mapconcierge) Lab. on Medium</a></li>
+  </ul>
+  <p>地図タイル：<a href="https://maps.gsi.go.jp/development/ichiran.html">地理院タイル</a>（国土地理院）<br>
+  ©FuruhashiLab, CC BY 4.0</p>
+</footer>
+
+<script>
+  // 画像がまだ images/ に置かれていないときは、ファイル名入りの枠を表示する
+  document.querySelectorAll('figure img').forEach(function (img) {
+    function showMissing() {
+      var box = document.createElement('div');
+      box.className = 'missing';
+      box.setAttribute('role', 'img');
+      box.setAttribute('aria-label', img.alt);
+      box.textContent = img.getAttribute('src') + ' を追加してください';
+      img.replaceWith(box);
+    }
+    if (img.complete && img.naturalWidth === 0) showMissing();
+    else img.addEventListener('error', showMissing);
+  });
+</script>
+</body>
+</html>
